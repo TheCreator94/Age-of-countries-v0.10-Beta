@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empire of War</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        .game-container {
+            width: 90%;
+            max-width: 1200px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #map-container {
+            width: 500px;
+            height: 500px;
+            border: 2px solid #333;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 2px;
+            margin: 0 auto;
+        }
+
+        .map-cell {
+            width: 100%;
+            height: 100%;
+            background-color: #2ecc71;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.9em;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .owned-by-player {
+            background-color: #3498db;
+        }
+
+        .owned-by-ai {
+            background-color: #e74c3c;
+        }
+
+        .stats {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        button {
+            margin: 5px;
+            padding: 10px;
+            font-size: 1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <header>
+            <h1>Empire of War</h1>
+            <p id="turn-counter">Turn: 1</p>
+            <p id="messages">Conquer the world by capturing territories!</p>
+        </header>
+
+        <div class="stats">
+            <p><strong>Gold:</strong> <span id="gold">100</span></p>
+            <p><strong>Army Size:</strong> <span id="army-size">50</span></p>
+            <p><strong>Technology Level:</strong> <span id="tech-level">1</span></p>
+            <p><strong>Controlled Territories:</strong> <span id="territories">0</span></p>
+        </div>
+
+        <div id="map-container"></div>
+
+        <div class="controls">
+            <button id="end-turn-btn">End Turn</button>
+            <button id="recruit-army-btn">Recruit Army (-20 Gold)</button>
+            <button id="upgrade-tech-btn">Upgrade Technology (-50 Gold)</button>
+            <button id="improve-economy-btn">Improve Economy (-30 Gold)</button>
+            <button id="declare-war-btn">Declare War</button>
+        </div>
+    </div>
+
+    <script>
+        const mapSize = 5;
+        const playerName = "Player";
+        const aiName = "AI Nation";
+        let gold = 100;
+        let armySize = 50;
+        let techLevel = 1;
+        let controlledTerritories = 0;
+        let aiGold = 100;
+        let aiArmy = 50;
+        let aiControlledTerritories = 0;
+        let turnCount = 1;
+        let map = [];
+        let isAtWar = false;
+
+        function startGame() {
+            createMap();
+            document.getElementById("end-turn-btn").addEventListener("click", endTurn);
+            document.getElementById("recruit-army-btn").addEventListener("click", recruitArmy);
+            document.getElementById("upgrade-tech-btn").addEventListener("click", upgradeTech);
+            document.getElementById("improve-economy-btn").addEventListener("click", improveEconomy);
+            document.getElementById("declare-war-btn").addEventListener("click", declareWar);
+            updateStats();
+        }
+
+        function createMap() {
+            const mapContainer = document.getElementById("map-container");
+            mapContainer.innerHTML = "";
+            for (let y = 0; y < mapSize; y++) {
+                map[y] = [];
+                for (let x = 0; x < mapSize; x++) {
+                    const territory = { ownedBy: null, resources: Math.floor(Math.random() * 20) + 5 };
+                    map[y][x] = territory;
+
+                    const cell = document.createElement("div");
+                    cell.classList.add("map-cell");
+                    cell.innerText = `${territory.resources} G`;
+
+                    cell.addEventListener("click", () => attack(x, y));
+
+                    mapContainer.appendChild(cell);
+                }
+            }
+        }
+
+        function attack(x, y) {
+            const territory = map[y][x];
+            const messages = document.getElementById("messages");
+
+            if (territory.ownedBy === playerName) {
+                messages.textContent = "This territory is already yours!";
+                return;
+            }
+
+            const playerStrength = armySize * techLevel;
+            const enemyStrength = territory.ownedBy === aiName ? aiArmy : 20;
+
+            if (playerStrength > enemyStrength) {
+                territory.ownedBy = playerName;
+                controlledTerritories++;
+                gold += territory.resources;
+                armySize -= 5;
+                messages.textContent = `You conquered a territory at (${x}, ${y})!`;
+                updateStats();
+                updateMap();
+                endTurn(); // Automatically proceed to the next turn
+            } else {
+                messages.textContent = "Your attack failed!";
+                armySize -= 10;
+            }
+
+            checkWinCondition();
+        }
+
+        function endTurn() {
+            gold += controlledTerritories * 10;
+            aiGold += aiControlledTerritories * 10;
+
+            if (aiGold >= 20) {
+                aiArmy += 10;
+                aiGold -= 20;
+            }
+
+            if (isAtWar) {
+                aiAttack();
+            }
+
+            turnCount++;
+            document.getElementById("turn-counter").textContent = `Turn: ${turnCount}`;
+
+            if (turnCount === 3) {
+                spawnAI();
+            }
+
+            updateStats();
+            document.getElementById("messages").textContent = "Turn ended.";
+        }
+
+        function spawnAI() {
+            for (let y = 0; y < mapSize; y++) {
+                for (let x = 0; x < mapSize; x++) {
+                    const territory = map[y][x];
+                    if (!territory.ownedBy) {
+                        territory.ownedBy = aiName;
+                        aiControlledTerritories++;
+                        updateMap();
+                        return;
+                    }
+                }
+            }
+        }
+
+        function declareWar() {
+            isAtWar = true;
+            document.getElementById("messages").textContent = "You declared war on AI!";
+        }
+
+        function aiAttack() {
+            for (let y = 0; y < mapSize; y++) {
+                for (let x = 0; x < mapSize; x++) {
+                    const territory = map[y][x];
+                    if (territory.ownedBy === playerName) {
+                        const aiStrength = aiArmy * 1.2;
+                        const playerStrength = armySize;
+
+                        if (aiStrength > playerStrength) {
+                            territory.ownedBy = aiName;
+                            aiControlledTerritories++;
+                            controlledTerritories--;
+                            aiArmy -= 5;
+                            document.getElementById("messages").textContent = `AI captured your territory at (${x}, ${y})!`;
+                            updateMap();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkWinCondition() {
+            const totalTerritories = mapSize * mapSize;
+
+            if (controlledTerritories === totalTerritories) {
+                document.getElementById("messages").textContent = "You conquered the world! Resetting map...";
+                resetMap();
+            } else if (aiControlledTerritories === totalTerritories) {
+                document.getElementById("messages").textContent = "AI conquered the world! Resetting map...";
+                resetMap();
+            }
+        }
+
+        function resetMap() {
+            createMap();
+            controlledTerritories = 0;
+            aiControlledTerritories = 0;
+            updateMap();
+            updateStats();
+        }
+
+        function recruitArmy() {
+            if (gold >= 20) {
+                gold -= 20;
+                armySize += 10;
+                document.getElementById("messages").textContent = "You recruited more troops!";
+            } else {
+                document.getElementById("messages").textContent = "Not enough gold!";
+            }
+            updateStats();
+        }
+
+        function upgradeTech() {
+            if (gold >= 50) {
+                gold -= 50;
+                techLevel++;
+                document.getElementById("messages").textContent = "Technology level upgraded!";
+            } else {
+                document.getElementById("messages").textContent = "Not enough gold!";
+            }
+            updateStats();
+        }
+
+        function improveEconomy() {
+            if (gold >= 30) {
+                gold -= 30;
+                controlledTerritories++;
+                document.getElementById("messages").textContent = "Economy improved!";
+            } else {
+                document.getElementById("messages").textContent = "Not enough gold!";
+            }
+            updateStats();
+        }
+
+        function updateStats() {
+            document.getElementById("gold").textContent = gold;
+            document.getElementById("army-size").textContent = armySize;
+            document.getElementById("tech-level").textContent = techLevel;
+            document.getElementById("territories").textContent = controlledTerritories;
+        }
+
+        function updateMap() {
+            const mapContainer = document.getElementById("map-container");
+            const cells = mapContainer.children;
+            let index = 0;
+
+            for (let y = 0; y < mapSize; y++) {
+                for (let x = 0; x < mapSize; x++) {
+                    const territory = map[y][x];
+                    const cell = cells[index++];
+                    cell.classList.remove("owned-by-player", "owned-by-ai");
+
+                    if (territory.ownedBy === playerName) {
+                        cell.classList.add("owned-by-player");
+                    } else if (territory.ownedBy === aiName) {
+                        cell.classList.add("owned-by-ai");
+                    }
+                }
+            }
+        }
+
+        startGame();
+    </script>
+</body>
+</html>
